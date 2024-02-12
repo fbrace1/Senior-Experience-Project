@@ -10,6 +10,62 @@ frame_queue = queue.Queue(maxsize=10)  # Queue to hold frames from the video str
 templates = []  # Placeholder for card templates
 card_counter = 0  # Counter for the card images (unused in this snippet)
 counter_lock = threading.Lock()  # Lock for thread-safe increments of the counter (unused in this snippet)
+# Global variables
+selected_cards = []
+card_positions = []
+
+def draw_card_selection_overlay(frame):
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    text_color = (0, 255, 255)  # Yellow color in BGR format
+    
+    # Title text
+    title = "Please select your hand"
+    title_size = cv2.getTextSize(title, font, 0.5, 1)[0]
+    title_x = (frame.shape[1] - title_size[0]) // 2
+    title_y = frame.shape[0] // 2 - 20  # Start halfway down the screen and above the cards
+    cv2.putText(frame, title, (title_x, title_y), font, 0.5, text_color, 1)
+    
+    # Calculate positions for each card text and draw them
+    suits = ['S', 'H', 'D', 'C']  # Spades, Hearts, Diamonds, Clubs
+    values = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K']
+    y_start = frame.shape[0] // 2  # Starting halfway down the screen
+    row_height = 30  # Height of each row
+    card_positions.clear()  # Clear previous card positions if any
+    
+    for i, suit in enumerate(suits):
+        x_start = 10  # Start from the left side for each suit
+        y_position = y_start + i * row_height  # Position each suit in its own row
+        for value in values:
+            card_text = f"{value}{suit}"
+            cv2.putText(frame, card_text, (x_start, y_position), font, 0.5, text_color, 1)
+            # Update card_positions with the bounding box of the text for click detection
+            text_size = cv2.getTextSize(card_text, font, 0.5, 1)[0]
+            card_positions.append((x_start, y_position - text_size[1], x_start + text_size[0], y_position))
+            x_start += text_size[0] + 10  # Adjust spacing based on the text size
+
+def select_card(event, x, y, flags, param):
+    if event == cv2.EVENT_LBUTTONDOWN:
+        for idx, (x1, y1, x2, y2) in enumerate(card_positions):
+            if x1 < x < x2 and y1 < y < y2:
+                card_code = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'][idx % 13] + ['S', 'H', 'D', 'C'][idx // 13]
+                if card_code not in selected_cards:
+                    selected_cards.append(card_code)
+                if len(selected_cards) > 2:  # Keep only the last two selections
+                    selected_cards.pop(0)
+                print(f"Selected Cards: {', '.join(selected_cards)}")  # Display as a comma-separated string
+                break
+
+def draw_selected_cards_on_frame(frame, selected_cards):
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    text_color = (0, 255, 0)  # Green color in BGR format
+    x_start = 10
+    y_start = frame.shape[0] - 30  # Start drawing near the bottom of the frame
+    for card in selected_cards:
+        # Format the card text
+        card_text = card
+        cv2.putText(frame, card_text, (x_start, y_start), font, 0.7, text_color, 2)
+        text_size = cv2.getTextSize(card_text, font, 0.7, 2)[0]
+        x_start += text_size[0] + 10  # Move right for the next card
 
 
 def show_opening_screen():
@@ -38,7 +94,7 @@ def show_menu_screen():
 
     # Game Options
     cv2.putText(menu_screen, "1. Crazy 4's", (200, 200), font, 1, (255, 255, 255), 2)
-    cv2.putText(menu_screen, "2. Go Fish", (200, 250), font, 1, (255, 255, 255), 2)
+    cv2.putText(menu_screen, "2. Texas Hold'em Poker", (200, 250), font, 1, (255, 255, 255), 2)
 
     # Display the menu screen
     cv2.imshow("Menu", menu_screen)
@@ -158,15 +214,31 @@ def compare_cards(card_image, templates):
 def main():
     show_opening_screen()
     show_menu_screen()
+
     # Load the card templates
     load_templates('ARCard/my_templates')
+    
     # Initialize video capture
     cap = cv2.VideoCapture(0)
+    
     # Start a thread to capture frames from the video stream
     threading.Thread(target=capture_frames, args=(cap,), daemon=True).start()
-
+    
     cv2.namedWindow('Card Detector')
-
+    cv2.setMouseCallback('Card Detector', select_card)
+    
+    # Wait for two cards to be selected
+    while len(selected_cards) < 2:
+        ret, frame = cap.read()
+        if not ret:
+            continue
+        draw_card_selection_overlay(frame)
+        cv2.imshow('Card Detector', frame)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+    
+    # Clear selected card positions to prevent further selection
+    card_positions.clear()
     # Main loop for processing frames
     while True:
         # Skip the loop iteration if the frame queue is empty
@@ -176,6 +248,7 @@ def main():
         # Retrieve a frame from the queue
         frame = frame_queue.get()
 
+        draw_selected_cards_on_frame(frame, selected_cards)
         # Preprocess the frame for card detection
         gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         blurred_frame = cv2.GaussianBlur(gray_frame, (9, 9), 0)
