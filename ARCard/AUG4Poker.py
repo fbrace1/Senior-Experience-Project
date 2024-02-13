@@ -5,6 +5,8 @@ import queue
 import numpy as np
 import os
 
+# from screeninfo import get_monitors
+
 # Global variables
 frame_queue = queue.Queue(maxsize=10)  # Queue to hold frames from the video stream
 templates = []  # Placeholder for card templates
@@ -14,24 +16,53 @@ counter_lock = threading.Lock()  # Lock for thread-safe increments of the counte
 selected_cards = []
 card_positions = []
 
+
+
+
+def on_crazy_4s_click(*args):
+    print("Crazy 4's Selected")
+    # Call the function to start Crazy 4's game here
+
+def on_texas_holdem_click(*args):
+    print("Texas Hold'em Selected")
+    detect_cards_poker()
+
+def on_go_fish_click(*args):
+    print("Go Fish Selected")
+    # Call the function to start Go Fish game here
+
+def on_blackjack_click(*args):
+    print("Blackjack Selected")
+    # Call the function to start Blackjack game here
+
+def on_quit_click(*args):
+    print("Quit Selected")
+    # Call the function to quit the game here
+
+
 def draw_card_selection_overlay(frame):
     font = cv2.FONT_HERSHEY_SIMPLEX
-    text_color = (0, 255, 255)  # Yellow color in BGR format
+    text_color = (0, 255, 200)  # Yellow color in BGR format
     
     # Title text
-    title = "Please select your hand"
+    title = "TEXAS HOLD'EM POKER"
+    heading = "Please select the cards that you have been dealt: (your hand)"
     title_size = cv2.getTextSize(title, font, 0.5, 1)[0]
-    title_x = (frame.shape[1] - title_size[0]) // 2
-    title_y = frame.shape[0] // 2 - 20  # Start halfway down the screen and above the cards
-    cv2.putText(frame, title, (title_x, title_y), font, 0.5, text_color, 1)
+    title_x = 10#(frame.shape[1] - title_size[0]) // 2
+    title_y = 70#frame.shape[0] // 2 - 20  # Start halfway down the screen and above the cards
+    cv2.putText(frame, title, (title_x, title_y), font, 0.8, text_color, 1)
+    cv2.putText(frame, heading, (title_x, title_y+20), font, 0.6, (0,255,150), 1)
     
     # Calculate positions for each card text and draw them
     suits = ['S', 'H', 'D', 'C']  # Spades, Hearts, Diamonds, Clubs
     values = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K']
-    y_start = frame.shape[0] // 2  # Starting halfway down the screen
     row_height = 30  # Height of each row
     card_positions.clear()  # Clear previous card positions if any
-    
+
+    # Calculate the starting y position based on the number of rows and row height
+    num_rows = len(suits)
+    y_start = frame.shape[0] - (num_rows * row_height) - 20  # 20 is a bottom margin
+
     for i, suit in enumerate(suits):
         x_start = 10  # Start from the left side for each suit
         y_position = y_start + i * row_height  # Position each suit in its own row
@@ -42,7 +73,7 @@ def draw_card_selection_overlay(frame):
             text_size = cv2.getTextSize(card_text, font, 0.5, 1)[0]
             card_positions.append((x_start, y_position - text_size[1], x_start + text_size[0], y_position))
             x_start += text_size[0] + 10  # Adjust spacing based on the text size
-
+    
 def select_card(event, x, y, flags, param):
     if event == cv2.EVENT_LBUTTONDOWN:
         for idx, (x1, y1, x2, y2) in enumerate(card_positions):
@@ -72,6 +103,13 @@ def show_opening_screen():
     # Create a black image
     opening_screen = np.zeros((480, 640, 3), dtype=np.uint8)
     # Set the title text properties
+    # Get the size of the primary monitor
+    # monitor = get_monitors()[0]
+    # screen_width = monitor.width
+    # screen_height = monitor.height
+
+    # Create an opening screen with the size of the monitor
+    # opening_screen = np.zeros((screen_height, screen_width, 3), dtype=np.uint8)
     font = cv2.FONT_HERSHEY_SIMPLEX
     text = "ARcard Opening Screen"
     text_size = cv2.getTextSize(text, font, 1, 2)[0]
@@ -90,29 +128,70 @@ def show_menu_screen():
     font = cv2.FONT_HERSHEY_SIMPLEX
 
     # Title
-    cv2.putText(menu_screen, "Game Selection Menu", (50, 100), font, 1, (255, 255, 255), 2)
+    cv2.putText(menu_screen, "Game Selection Menu", (50, 50), font, 1, (255, 255, 255), 2)
 
     # Game Options
-    cv2.putText(menu_screen, "1. Crazy 4's", (200, 200), font, 1, (255, 255, 255), 2)
-    cv2.putText(menu_screen, "2. Texas Hold'em Poker", (200, 250), font, 1, (255, 255, 255), 2)
+    options = ["1. Crazy 4's", "2. Texas Hold'em Poker", "3. Go Fish", "4. Blackjack", "5. Quit"]
+    option_positions = []
 
-    # Display the menu screen
+    for i, option in enumerate(options):
+        y_position = 200 + i * 50
+        cv2.putText(menu_screen, option, (100, y_position), font, 1, (255, 255, 255), 2)
+        text_size = cv2.getTextSize(option, font, 1, 2)[0]
+        option_positions.append((200, y_position - text_size[1], 200 + text_size[0], y_position))
+
+    def on_mouse_click(event, x, y, flags, param):
+        if event == cv2.EVENT_LBUTTONDOWN:
+            for i, (x1, y1, x2, y2) in enumerate(option_positions):
+                if x1 < x < x2 and y1 < y < y2:
+                    print(f"{options[i]} Selected")
+                    # Call the corresponding function for the selected game here
+                    cv2.destroyAllWindows()
+                    if i == 0:
+                        on_crazy_4s_click()
+                    elif i == 1:
+                        on_texas_holdem_click()
+                    elif i == 2:
+                        on_go_fish_click()
+                    elif i == 3:
+                        on_blackjack_click()
+                    elif i == 4:
+                        on_quit_click()
+                    
     cv2.imshow("Menu", menu_screen)
-    key = cv2.waitKey(0)  # Wait indefinitely for a key press
+    cv2.setMouseCallback("Menu", on_mouse_click)
+    cv2.waitKey(0)
 
-    # Check which game is selected
-    if key == ord('1'):
-        print("Crazy 4's Selected")
-        # Here you can call a function to start Crazy 4's game
-    elif key == ord('2'):
-        print("Go Fish Selected")
-        # Here you can call a function to start Go Fish game
-    else:
-        print("Invalid Selection")
+def calculate_poker_probabilities(hand_cards, detected_cards=[]):
+    # Placeholder function for calculating poker probabilities
+    # For now, it returns dummy probabilities
+    return {
+        'Royal Flush': '0.000154%',
+        'Straight Flush': '0.00139%',
+        'Four of a Kind': '0.0240%',
+        'Full House': '0.144%',
+        'Flush': '0.197%',
+        'Straight': '0.392%',
+        'Three of a Kind': '2.11%',
+        'Two Pair': '4.75%',
+        'One Pair': '42.3%',
+        'High Card': '50.1%'
+    }
 
-    cv2.destroyAllWindows()
+def generate_probabilities_image(poker_hands):
+    probabilities_image = np.zeros((400, 300, 3), dtype=np.uint8)
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    font_scale = 0.5
+    color = (255, 255, 255)
+    line_type = 1
+    start_y = 20
+    line_height = 20
 
+    for i, (hand, probability) in enumerate(poker_hands.items()):
+        text = f"{hand}: {probability}"
+        cv2.putText(probabilities_image, text, (10, start_y + i * line_height), font, font_scale, color, line_type)
 
+    return probabilities_image
 
 
 
@@ -210,11 +289,8 @@ def compare_cards(card_image, templates):
 
     return best_match_name
 
-# Main function to execute the card detection and recognition
-def main():
-    show_opening_screen()
-    show_menu_screen()
 
+def detect_cards_poker():
     # Load the card templates
     load_templates('ARCard/my_templates')
     
@@ -291,6 +367,10 @@ def main():
 
         # Show the frame with detected cards
         cv2.imshow('Card Detector', frame)
+        #show the probability window with probabilities
+        poker_probabilities = calculate_poker_probabilities(selected_cards)
+        probabilities_image = generate_probabilities_image(poker_probabilities)
+        cv2.imshow('Probabilities', probabilities_image)
 
         # Break the loop if 'q' is pressed
         if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -299,6 +379,12 @@ def main():
     # Release resources
     cap.release()
     cv2.destroyAllWindows()
+    
+# Main function to execute the card detection and recognition
+def main():
+    show_opening_screen()
+    show_menu_screen()
+
 
 if __name__ == "__main__":
     main()
