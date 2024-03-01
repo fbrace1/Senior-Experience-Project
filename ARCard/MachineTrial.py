@@ -1,6 +1,7 @@
 import tensorflow as tf
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from random import shuffle
+from tensorflow.keras.regularizers import l2
 
 # Check if TensorFlow is using a GPU
 print(tf.test.gpu_device_name())
@@ -40,7 +41,7 @@ image_iterator = data_generator.flow(images)
 # Load and preprocess all images
 # Determine the number of images and their dimensions
 num_images = len(os.listdir(r'C:\Users\FBRAC\Projects\FredSeniorExperiment\Senior-Experience-Project\ARCard\Templates')) * 750
-image_shape = (180, 180, 1)
+image_shape = (92, 200, 1)
 
 # Create an empty array with the fixed shape
 data = np.empty((num_images, 2), dtype=object)
@@ -50,14 +51,14 @@ index = 0
 for i, img in tqdm(enumerate(os.listdir(r'C:\Users\FBRAC\Projects\FredSeniorExperiment\Senior-Experience-Project\ARCard\Templates'))):
     label = i
     img = cv2.imread(os.path.join('C:\\Users\\FBRAC\\Projects\\FredSeniorExperiment\\Senior-Experience-Project\\ARCard\\Templates\\', img), cv2.IMREAD_GRAYSCALE)
-    img = cv2.resize(img, (180, 180))
+    img = cv2.resize(img, (200, 92))
     imgs = img.reshape((1, img.shape[0], img.shape[1], 1))
     data_generator = ImageDataGenerator(rotation_range=90, brightness_range=(0.5, 1.5), shear_range=15.0, zoom_range=[.3, .8])
     data_generator.fit(imgs)
     image_iterator = data_generator.flow(imgs)
     for x in range(750):
         img_transformed = next(image_iterator)[0].astype('float32') / 255
-        img_transformed = cv2.resize(img_transformed, (180, 180))
+        img_transformed = cv2.resize(img_transformed, (200, 92))
         img_transformed = img_transformed[:, :, np.newaxis]  # Add a channel dimension
 
         if img_transformed.shape == image_shape:  # Check if the shape is correct
@@ -99,21 +100,41 @@ batch_size = 32
 # batch_size = 1
 
 # Define the model
+# model = tf.keras.models.Sequential([
+#     # tf.keras.layers.Conv2D(64, (3,3), activation='relu', input_shape=(train_X.shape[1], train_X.shape[2], train_X.shape[3])),
+#     tf.keras.layers.Conv2D(64, (3,3), activation='relu', input_shape=(92, 200, 1)),
+#     tf.keras.layers.MaxPooling2D(2, 2),
+#     tf.keras.layers.Conv2D(64, (3,3), activation='relu'),
+#     tf.keras.layers.MaxPooling2D(2,2),
+#     tf.keras.layers.Conv2D(128, (3,3), activation='relu'),
+#     tf.keras.layers.MaxPooling2D(2,2),
+#     tf.keras.layers.Conv2D(128, (3,3), activation='relu'),
+#     tf.keras.layers.MaxPooling2D(2,2),
+#     tf.keras.layers.Flatten(),
+#     tf.keras.layers.Dropout(0.6),
+#     tf.keras.layers.Dense(512, activation='relu'),
+#     tf.keras.layers.Dense(55, activation='softmax')
+# ])
+# Define the model with L2 regularization
 model = tf.keras.models.Sequential([
-    tf.keras.layers.Conv2D(64, (3,3), activation='relu', input_shape=(train_X.shape[1], train_X.shape[2], train_X.shape[3])),
+    tf.keras.layers.Conv2D(64, (3,3), activation='relu', kernel_regularizer=l2(0.001), input_shape=(train_X.shape[1], train_X.shape[2], train_X.shape[3])),
+    # tf.keras.layers.Conv2D(64, (3,3), activation='relu', kernel_regularizer=l2(0.001), input_shape=(92, 200, 1)),
     tf.keras.layers.MaxPooling2D(2, 2),
-    tf.keras.layers.Conv2D(64, (3,3), activation='relu'),
+    tf.keras.layers.Dropout(0.25),  # Add dropout layer after pooling
+    tf.keras.layers.Conv2D(64, (3,3), activation='relu', kernel_regularizer=l2(0.001)),
     tf.keras.layers.MaxPooling2D(2,2),
-    tf.keras.layers.Conv2D(128, (3,3), activation='relu'),
+    tf.keras.layers.Dropout(0.25),  # Add dropout layer after pooling
+    tf.keras.layers.Conv2D(128, (3,3), activation='relu', kernel_regularizer=l2(0.001)),
     tf.keras.layers.MaxPooling2D(2,2),
-    tf.keras.layers.Conv2D(128, (3,3), activation='relu'),
+    tf.keras.layers.Dropout(0.25),  # Add dropout layer after pooling
+    tf.keras.layers.Conv2D(128, (3,3), activation='relu', kernel_regularizer=l2(0.001)),
     tf.keras.layers.MaxPooling2D(2,2),
+    tf.keras.layers.Dropout(0.25),  # Add dropout layer after pooling
     tf.keras.layers.Flatten(),
-    tf.keras.layers.Dropout(0.6),
     tf.keras.layers.Dense(512, activation='relu'),
+    tf.keras.layers.Dropout(0.5),  # Add dropout layer before the final dense layer
     tf.keras.layers.Dense(55, activation='softmax')
 ])
-
 model.summary()
 
 # Set up a checkpoint callback

@@ -4,6 +4,26 @@ import threading
 import queue
 import numpy as np
 import os
+from tensorflow.keras.models import load_model
+
+# Load the trained model
+model = load_model(r'C:\Users\FBRAC\Projects\FredSeniorExperiment\Senior-Experience-Project\250epochs_conv.h5')
+class_names = [
+    'Ace of Diamonds', 'Two of Diamonds', 'Three of Diamonds', 'Four of Diamonds', 'Five of Diamonds', 
+    'Six of Diamonds', 'Seven of Diamonds', 'Eight of Diamonds', 'Nine of Diamonds', 'Ten of Diamonds', 
+    'Jack of Diamonds', 'Queen of Diamonds', 'King of Diamonds',
+    'Ace of Hearts', 'Two of Hearts', 'Three of Hearts', 'Four of Hearts', 'Five of Hearts', 
+    'Six of Hearts', 'Seven of Hearts', 'Eight of Hearts', 'Nine of Hearts', 'Ten of Hearts', 
+    'Jack of Hearts', 'Queen of Hearts', 'King of Hearts',
+    'Ace of Clubs', 'Two of Clubs', 'Three of Clubs', 'Four of Clubs', 'Five of Clubs', 
+    'Six of Clubs', 'Seven of Clubs', 'Eight of Clubs', 'Nine of Clubs', 'Ten of Clubs', 
+    'Jack of Clubs', 'Queen of Clubs', 'King of Clubs',
+    'Ace of Spades', 'Two of Spades', 'Three of Spades', 'Four of Spades', 'Five of Spades', 
+    'Six of Spades', 'Seven of Spades', 'Eight of Spades', 'Nine of Spades', 'Ten of Spades', 
+    'Jack of Spades', 'Queen of Spades', 'King of Spades',
+    'Joker', 'Joker', 'Back Card'
+]
+
 
 # Global variables
 frame_queue = queue.Queue(maxsize=10)  # Queue to hold frames from the video stream
@@ -127,32 +147,24 @@ def capture_frames(cap):
             frame_queue.put(frame)
 
 # Function to compare a card image against the loaded templates
-def compare_cards(card_image, templates):
-    # Assuming the top left corner contains the rank and suit
-    roi_height, roi_width = card_image.shape[:2]
-    roi_height, roi_width = int(roi_height * 0.3), int(roi_width * 0.18)
-
-    # Crop and resize the region of interest for comparison
-    roi = card_image[0:roi_height, 0:roi_width]
-    scaled_roi = cv2.resize(roi, (card_image.shape[1], card_image.shape[0]))
-
-    card_gray = cv2.cvtColor(scaled_roi, cv2.COLOR_BGR2GRAY)
-    best_match_score = 0.5
-    best_match_name = None
-
-    # Iterate through each template for comparison
-    for template_name, template in templates:
-        # Ensure the template can be compared to the ROI
-        if card_gray.shape[0] <= template.shape[0] and card_gray.shape[1] <= template.shape[1]:
-            res = cv2.matchTemplate(card_gray, template, cv2.TM_CCOEFF_NORMED)
-            _, max_val, _, _ = cv2.minMaxLoc(res)
-            if max_val > best_match_score:
-                best_match_score = max_val
-                best_match_name = template_name
-    if best_match_name is None:
-        best_match_name = 'Unknown'
-
+def compare_cards(card_image, model):
+    # Convert the card image to grayscale
+    card_image_gray = cv2.cvtColor(card_image, cv2.COLOR_BGR2GRAY)
+    # Resize the image to match the input shape expected by the model
+    card_image_resized = cv2.resize(card_image_gray, (180, 180))
+    # Expand the dimensions of the image to match the input shape expected by the model
+    card_image_expanded = np.expand_dims(card_image_resized, axis=[0, -1])
+    # Normalize the pixel values
+    card_image_expanded = card_image_expanded / 255.0
+    # Make a prediction
+    predictions = model.predict(card_image_expanded)
+    # Get the index of the highest probability class
+    predicted_class = np.argmax(predictions)
+    # Map the predicted class index to the corresponding class name
+    best_match_name = class_names[predicted_class]  # You need to define 'class_names' list with the names of your classes
     return best_match_name
+
+
 
 # Main function to execute the card detection and recognition
 def main():
@@ -166,6 +178,7 @@ def main():
     threading.Thread(target=capture_frames, args=(cap,), daemon=True).start()
 
     cv2.namedWindow('Card Detector')
+    cv2.resizeWindow('Card Detector', 1080, 720)
 
     # Main loop for processing frames
     while True:
@@ -208,7 +221,7 @@ def main():
                     warped_image = four_point_transform(frame, approx.reshape(4, 2))
                     detected_cards.append(warped_image)
                     # Compare the transformed card image to the templates
-                    best_match_name = compare_cards(warped_image, templates)
+                    best_match_name = compare_cards(warped_image, model)
                     # Display the name of the detected card on the frame
                     text_position = (x, y - 10) if y - 10 > 0 else (x, y + 20)
                     cv2.putText(frame, best_match_name, text_position, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
@@ -216,8 +229,9 @@ def main():
         # Display the total number of detected cards
         cv2.putText(frame, f"Detected Cards: {len(detected_cards)}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
+        resized_frame = cv2.resize(frame, (1080, 720))
         # Show the frame with detected cards
-        cv2.imshow('Card Detector', frame)
+        cv2.imshow('Card Detector', resized_frame)
 
         # Break the loop if 'q' is pressed
         if cv2.waitKey(1) & 0xFF == ord('q'):
